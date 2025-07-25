@@ -75,9 +75,11 @@ def add_movie_listitem(movie):
 
     favorites = load_favorites()
     if movie in favorites:
-        context_menu = [("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={json.dumps(movie)})")]
+        movie_json = urllib.parse.quote(json.dumps(movie))
+        context_menu = [("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})")]
     else:
-        context_menu = [("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={json.dumps(movie)})")]
+        movie_json = urllib.parse.quote(json.dumps(movie))
+        context_menu = [("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})")]
 
     item.addContextMenuItems(context_menu)
 
@@ -180,7 +182,7 @@ if __name__ == "__main__":
         movie_arg = args.get('movie')
         if movie_arg:
             try:
-                movie = json.loads(movie_arg)
+                movie = json.loads(urllib.parse.unquote(movie_arg))
                 add_to_favorites(movie)
             except json.JSONDecodeError:
                 xbmcgui.Dialog().notification("EpiKodi", "Erreur : données du film invalides.", xbmcgui.NOTIFICATION_ERROR, 3000)
