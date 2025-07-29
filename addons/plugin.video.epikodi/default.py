@@ -25,7 +25,6 @@ def show_movie_info(movie):
     rating = f"{movie.get('vote_average', 0):.1f}/10"
     poster_url = IMAGE_URL + movie['poster_path'] if movie.get('poster_path') else ""
 
-    # Construction du texte d'infos
     info_text = f"[B]{movie['title']}[/B]\n\n" \
                 f"[COLOR lightblue]Année :[/COLOR] {year}\n" \
                 f"[COLOR lightblue]Note TMDB :[/COLOR] {rating}\n\n" \
@@ -124,15 +123,18 @@ def add_to_favorites(movie):
     favorites = load_favorites()
 
     def is_same(fav, target):
+        if fav.get('id') and target.get('id'):
+            return fav['id'] == target['id']
         return fav.get('title', '').lower() == target.get('title', '').lower() and \
                fav.get('release_date', '') == target.get('release_date', '')
 
     if any(is_same(fav, movie) for fav in favorites):
-        xbmcgui.Dialog().notification("EpiKodi", f"'{movie['title']}' est déjà dans les favoris.", xbmcgui.NOTIFICATION_WARNING, 3000)
-    else:
-        favorites.append(movie)
-        save_favorites(favorites)
-        xbmcgui.Dialog().notification("EpiKodi", f"'{movie['title']}' ajouté aux favoris.", xbmcgui.NOTIFICATION_INFO, 3000)
+        xbmcgui.Dialog().notification("EpiKodi", f"'{movie['title']}' est déjà dans les favoris.", xbmcgui.NOTIFICATION_INFO, 3000)
+        return
+
+    favorites.append(movie)
+    save_favorites(favorites)
+    xbmcgui.Dialog().notification("EpiKodi", f"'{movie['title']}' ajouté aux favoris.", xbmcgui.NOTIFICATION_INFO, 3000)
 
 def remove_from_favorites(movie):
     favorites = load_favorites()
@@ -159,7 +161,6 @@ def show_favorites():
     for movie in favorites:
         add_movie_listitem(movie)
     xbmcplugin.endOfDirectory(handle)
-
 
 def manual_add_to_favorites():
     title = xbmcgui.Dialog().input("Titre du film à ajouter")
@@ -215,8 +216,13 @@ if __name__ == "__main__":
     elif action == "manual_add":
         manual_add_to_favorites()
     elif action == "remove_from_favorites":
-        movie = json.loads(args.get('movie', '{}'))
-        remove_from_favorites(movie)
+        movie_arg = args.get('movie')
+        if movie_arg:
+            try:
+                movie = json.loads(urllib.parse.unquote(movie_arg))
+                remove_from_favorites(movie)
+            except json.JSONDecodeError:
+                xbmcgui.Dialog().notification("EpiKodi", "Erreur : données du film invalides.", xbmcgui.NOTIFICATION_ERROR, 3000)
     elif action == "play":
         movie_id = args.get('movie_id')
         if movie_id:
