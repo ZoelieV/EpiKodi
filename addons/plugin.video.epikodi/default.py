@@ -14,6 +14,26 @@ import urllib.parse
 FAVORITES_FILE = os.path.join(xbmcvfs.translatePath("special://profile/addon_data/plugin.video.epikodi"), "favorites.json")
 
 
+def show_movie_info(movie):
+    """Affiche une fiche d'informations détaillée pour un film."""
+    cast_text = ", ".join(movie.get('top_cast', []))
+    plot = movie.get('overview', "")
+    if cast_text:
+        plot += f"\n\n[COLOR yellow]Acteurs principaux :[/COLOR] {cast_text}"
+
+    year = movie.get('release_date', "").split("-")[0] if movie.get('release_date') else "Inconnue"
+    rating = f"{movie.get('vote_average', 0):.1f}/10"
+    poster_url = IMAGE_URL + movie['poster_path'] if movie.get('poster_path') else ""
+
+    # Construction du texte d'infos
+    info_text = f"[B]{movie['title']}[/B]\n\n" \
+                f"[COLOR lightblue]Année :[/COLOR] {year}\n" \
+                f"[COLOR lightblue]Note TMDB :[/COLOR] {rating}\n\n" \
+                f"{plot}"
+
+    dialog = xbmcgui.Dialog()
+    dialog.textviewer(f"Informations - {movie['title']}", info_text)
+
 def get_movie_credits(movie_id):
     url = f"{BASE_URL}/movie/{movie_id}/credits?api_key={API_KEY}&language=fr-FR"
     resp = requests.get(url)
@@ -60,6 +80,7 @@ def add_movie_listitem(movie):
     poster_url = IMAGE_URL + movie['poster_path'] if movie.get('poster_path') else ""
     item = xbmcgui.ListItem(label=movie['title'])
     item.setArt({"poster": poster_url, "thumb": poster_url})
+
     cast_text = ", ".join(movie.get('top_cast', []))
     full_plot = movie.get('overview', "")
     if cast_text:
@@ -73,18 +94,19 @@ def add_movie_listitem(movie):
         "premiered": movie.get('release_date', "")
     })
 
+    # Ajout des menus contextuels
+    movie_json = urllib.parse.quote(json.dumps(movie))
     favorites = load_favorites()
+    context_menu = [
+        ("Afficher les informations", f"RunPlugin({sys.argv[0]}?action=show_info&movie={movie_json})")
+    ]
     if movie in favorites:
-        movie_json = urllib.parse.quote(json.dumps(movie))
-        context_menu = [("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})")]
+        context_menu.append(("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})"))
     else:
-        movie_json = urllib.parse.quote(json.dumps(movie))
-        context_menu = [("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})")]
+        context_menu.append(("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})"))
 
     item.addContextMenuItems(context_menu)
-
     url = f"{sys.argv[0]}?action=play&movie_id={movie.get('id', '')}"
-
     xbmcplugin.addDirectoryItem(handle, url, item, isFolder=False)
 
 def load_favorites():
@@ -199,6 +221,11 @@ if __name__ == "__main__":
         movie_id = args.get('movie_id')
         if movie_id:
             play_movie(movie_id)
+    elif action == "show_info":
+        movie_arg = args.get('movie')
+        if movie_arg:
+            movie = json.loads(urllib.parse.unquote(movie_arg))
+            show_movie_info(movie)
     else:
         choice = xbmcgui.Dialog().select("EpiKodi", [
             "Rechercher un film",
