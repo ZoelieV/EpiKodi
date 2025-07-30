@@ -32,16 +32,23 @@ def add_movie_listitem(movie):
 
     movie_json = urllib.parse.quote(json.dumps(movie))
     favorites = load_favorites()
+
+    is_favorite = any(fav.get('id') == movie.get('id') for fav in favorites)
+
     context_menu = [
-        ("Afficher les informations", f"RunPlugin({sys.argv[0]}?action=show_info&movie={movie_json})")
+        ("Afficher les informations", f"RunPlugin({sys.argv[0]}?action=show_info&movie={movie_json})"),
+        ("Ajouter/Modifier ma note et review", f"RunPlugin({sys.argv[0]}?action=add_review&movie={movie_json})"),
+        ("Lire la bande-annonce", f"RunPlugin({sys.argv[0]}?action=play&movie_id={movie.get('id', '')})")
     ]
-    if movie in favorites:
+
+    if is_favorite:
         context_menu.append(("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})"))
     else:
         context_menu.append(("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})"))
 
     item.addContextMenuItems(context_menu)
-    url = f"{sys.argv[0]}?action=play&movie_id={movie.get('id', '')}"
+
+    url = f"{sys.argv[0]}?action=show_info&movie={movie_json}"
     xbmcplugin.addDirectoryItem(handle, url, item, isFolder=False)
 
 def load_favorites():
