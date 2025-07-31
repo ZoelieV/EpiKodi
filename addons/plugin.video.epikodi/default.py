@@ -2,13 +2,15 @@ import sys
 import xbmcplugin
 import xbmcgui
 import local_scanner
+import xbmc
 import requests
 from tmdb import API_KEY, BASE_URL, IMAGE_URL
 import json
 import urllib.parse
-from favorite import add_to_favorites, remove_from_favorites, show_favorites, manual_add_to_favorites, load_favorites
+from favorite import add_to_favorites, remove_from_favorites, show_favorites, manual_add_to_favorites, add_movie_listitem
 from review_note import add_review
 from films_fiche import show_movie_info, get_movie_credits
+from films_history import show_history, remove_from_history, clear_history
 
 def get_similar_movies(movie_id):
     url = f"{BASE_URL}/movie/{movie_id}/similar?api_key={API_KEY}&language=fr-FR"
@@ -52,7 +54,6 @@ def show_local_library():
     xbmcplugin.endOfDirectory(handle)
 
 def play_movie(movie_id):
-    """Lecture de la bande-annonce d'un film."""
     url = f"{BASE_URL}/movie/{movie_id}/videos?api_key={API_KEY}&language=fr-FR"
     resp = requests.get(url)
     if resp.status_code == 200:
@@ -67,47 +68,6 @@ def play_movie(movie_id):
             xbmcgui.Dialog().notification("EpiKodi", "Aucune bande-annonce YouTube trouvée.", xbmcgui.NOTIFICATION_INFO, 3000)
     else:
         xbmcgui.Dialog().notification("EpiKodi", f"Erreur API : {resp.status_code}", xbmcgui.NOTIFICATION_ERROR, 3000)
-
-
-def add_movie_listitem(movie):
-    handle = int(sys.argv[1])
-    poster_url = IMAGE_URL + movie['poster_path'] if movie.get('poster_path') else ""
-    item = xbmcgui.ListItem(label=movie['title'])
-    item.setArt({"poster": poster_url, "thumb": poster_url})
-
-    cast_text = ", ".join(movie.get('top_cast', []))
-    full_plot = movie.get('overview', "")
-    if cast_text:
-        full_plot += "\n\nActeurs principaux : " + cast_text
-
-    item.setInfo("video", {
-        "title": movie['title'],
-        "plot": full_plot,
-        "year": movie.get('release_date', "").split("-")[0] if movie.get('release_date') else "",
-        "rating": float(movie.get('vote_average', 0)),
-        "premiered": movie.get('release_date', "")
-    })
-
-    movie_json = urllib.parse.quote(json.dumps(movie))
-    favorites = load_favorites()
-
-    is_favorite = any(fav.get('id') == movie.get('id') for fav in favorites)
-
-    context_menu = [
-        ("Afficher les informations", f"RunPlugin({sys.argv[0]}?action=show_info&movie={movie_json})"),
-        ("Ajouter/Modifier ma note et review", f"RunPlugin({sys.argv[0]}?action=add_review&movie={movie_json})"),
-        ("Lire la bande-annonce", f"RunPlugin({sys.argv[0]}?action=play&movie_id={movie.get('id', '')})")
-    ]
-
-    if is_favorite:
-        context_menu.append(("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})"))
-    else:
-        context_menu.append(("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})"))
-
-    item.addContextMenuItems(context_menu)
-
-    url = f"{sys.argv[0]}?action=show_info&movie={movie_json}"
-    xbmcplugin.addDirectoryItem(handle, url, item, isFolder=False)
 
 
 if __name__ == "__main__":
@@ -158,13 +118,31 @@ if __name__ == "__main__":
             movie = json.loads(urllib.parse.unquote(movie_arg))
             add_review(movie['id'], movie['title'])
 
+    elif action == "history":
+        show_history(add_movie_listitem)
+
+    elif action == "remove_from_history":
+        movie_arg = args.get('movie')
+        if movie_arg:
+            try:
+                movie = json.loads(urllib.parse.unquote(movie_arg))
+                remove_from_history(movie)
+                xbmcgui.Dialog().notification("EpiKodi", "Film supprimé de l'historique.", xbmcgui.NOTIFICATION_INFO, 3000)
+            except json.JSONDecodeError:
+                xbmcgui.Dialog().notification("EpiKodi", "Erreur : données du film invalides.", xbmcgui.NOTIFICATION_ERROR, 3000)
+
+    elif action == "clear_history":
+        clear_history()
+        xbmc.executebuiltin("Container.Refresh")
+
     else:
         choice = xbmcgui.Dialog().select("EpiKodi", [
             "Rechercher un film",
             "Scanner la bibliothèque locale",
             "Voir les favoris",
             "Ajouter un favori manuellement",
-            "Rechercher des films similaires"
+            "Rechercher des films similaires",
+            "Voir l'historique des films consultés"
         ])
 
         if choice == 0:
@@ -194,3 +172,17 @@ if __name__ == "__main__":
                     for similar in similar_movies:
                         add_movie_listitem(similar)
                     xbmcplugin.endOfDirectory(handle)
+        
+        elif choice == 5:
+            li = xbmcgui.ListItem("Historique de consultation")
+            li.addContextMenuItems([
+                ("Vider l'historique", "RunPlugin(plugin://plugin.video.epikodi/?action=clear_history)")
+            ])
+            xbmcplugin.addDirectoryItem(
+                handle,
+                "plugin://plugin.video.epikodi/?action=history",
+                li,
+                isFolder=True
+            )
+            show_history(add_movie_listitem)
+            xbmcplugin.endOfDirectory(handle)

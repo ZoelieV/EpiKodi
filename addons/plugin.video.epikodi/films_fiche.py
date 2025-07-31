@@ -2,6 +2,7 @@ import xbmcgui
 import requests
 from tmdb import API_KEY, BASE_URL
 from review_note import load_reviews
+from films_history import add_to_history
 
 def get_movie_credits(movie_id):
     url = f"{BASE_URL}/movie/{movie_id}/credits?api_key={API_KEY}&language=fr-FR"
@@ -11,6 +12,7 @@ def get_movie_credits(movie_id):
     return None
 
 def show_movie_info(movie):
+    add_to_history(movie)
     reviews = load_reviews()
     user_review = reviews.get(str(movie['id']), {})
 
