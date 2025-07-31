@@ -6,15 +6,9 @@ import requests
 from tmdb import API_KEY, BASE_URL, IMAGE_URL
 import json
 import urllib.parse
-from favorite import add_to_favorites, remove_from_favorites, show_favorites, manual_add_to_favorites, add_movie_listitem
-from review_note import load_reviews, add_review
-
-def get_movie_credits(movie_id):
-    url = f"{BASE_URL}/movie/{movie_id}/credits?api_key={API_KEY}&language=fr-FR"
-    resp = requests.get(url)
-    if resp.status_code == 200:
-        return resp.json()
-    return None
+from favorite import add_to_favorites, remove_from_favorites, show_favorites, manual_add_to_favorites, load_favorites
+from review_note import add_review
+from films_fiche import show_movie_info, get_movie_credits
 
 def get_similar_movies(movie_id):
     url = f"{BASE_URL}/movie/{movie_id}/similar?api_key={API_KEY}&language=fr-FR"
@@ -74,30 +68,47 @@ def play_movie(movie_id):
     else:
         xbmcgui.Dialog().notification("EpiKodi", f"Erreur API : {resp.status_code}", xbmcgui.NOTIFICATION_ERROR, 3000)
 
-def show_movie_info(movie):
-    reviews = load_reviews()
-    user_review = reviews.get(str(movie['id']), {})
+
+def add_movie_listitem(movie):
+    handle = int(sys.argv[1])
+    poster_url = IMAGE_URL + movie['poster_path'] if movie.get('poster_path') else ""
+    item = xbmcgui.ListItem(label=movie['title'])
+    item.setArt({"poster": poster_url, "thumb": poster_url})
 
     cast_text = ", ".join(movie.get('top_cast', []))
-    plot = movie.get('overview', "")
+    full_plot = movie.get('overview', "")
     if cast_text:
-        plot += f"\n\n[COLOR yellow]Acteurs principaux :[/COLOR] {cast_text}"
+        full_plot += "\n\nActeurs principaux : " + cast_text
 
-    year = movie.get('release_date', "").split("-")[0] if movie.get('release_date') else "Inconnue"
-    rating = f"{movie.get('vote_average', 0):.1f}/10"
+    item.setInfo("video", {
+        "title": movie['title'],
+        "plot": full_plot,
+        "year": movie.get('release_date', "").split("-")[0] if movie.get('release_date') else "",
+        "rating": float(movie.get('vote_average', 0)),
+        "premiered": movie.get('release_date', "")
+    })
 
-    info_text = f"[B]{movie['title']}[/B]\n\n" \
-                f"[COLOR lightblue]Année :[/COLOR] {year}\n" \
-                f"[COLOR lightblue]Note TMDB :[/COLOR] {rating}\n\n" \
-                f"{plot}"
+    movie_json = urllib.parse.quote(json.dumps(movie))
+    favorites = load_favorites()
 
-    if user_review:
-        info_text += f"\n\n[COLOR orange][B]Votre note :[/B][/COLOR] {user_review['rating']}/10"
-        if user_review['review']:
-            info_text += f"\n[COLOR orange][B]Votre avis :[/B][/COLOR] {user_review['review']}"
+    is_favorite = any(fav.get('id') == movie.get('id') for fav in favorites)
 
-    dialog = xbmcgui.Dialog()
-    dialog.textviewer(f"Informations - {movie['title']}", info_text)
+    context_menu = [
+        ("Afficher les informations", f"RunPlugin({sys.argv[0]}?action=show_info&movie={movie_json})"),
+        ("Ajouter/Modifier ma note et review", f"RunPlugin({sys.argv[0]}?action=add_review&movie={movie_json})"),
+        ("Lire la bande-annonce", f"RunPlugin({sys.argv[0]}?action=play&movie_id={movie.get('id', '')})")
+    ]
+
+    if is_favorite:
+        context_menu.append(("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})"))
+    else:
+        context_menu.append(("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})"))
+
+    item.addContextMenuItems(context_menu)
+
+    url = f"{sys.argv[0]}?action=show_info&movie={movie_json}"
+    xbmcplugin.addDirectoryItem(handle, url, item, isFolder=False)
+
 
 if __name__ == "__main__":
     handle = int(sys.argv[1]) if len(sys.argv) > 1 else -1
@@ -147,22 +158,13 @@ if __name__ == "__main__":
             movie = json.loads(urllib.parse.unquote(movie_arg))
             add_review(movie['id'], movie['title'])
 
-    elif action == "show_similar":
-        movie_arg = args.get('movie')
-        if movie_arg:
-            movie = json.loads(urllib.parse.unquote(movie_arg))
-            similar_movies = get_similar_movies(movie['id'])
-            for similar in similar_movies:
-                add_movie_listitem(similar)
-            xbmcplugin.endOfDirectory(handle)
-
     else:
         choice = xbmcgui.Dialog().select("EpiKodi", [
             "Rechercher un film",
             "Scanner la bibliothèque locale",
             "Voir les favoris",
             "Ajouter un favori manuellement",
-            "Afficher les films similaires"
+            "Rechercher des films similaires"
         ])
 
         if choice == 0:

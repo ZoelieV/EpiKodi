@@ -5,51 +5,11 @@ import xbmcvfs
 from tmdb import API_KEY, BASE_URL, IMAGE_URL
 import json
 import os
-import urllib.parse
+from default import add_movie_listitem
 
 
 FAVORITES_FILE = os.path.join(xbmcvfs.translatePath("special://profile/addon_data/plugin.video.epikodi"), "favorites.json")
 
-
-def add_movie_listitem(movie):
-    handle = int(sys.argv[1])
-    poster_url = IMAGE_URL + movie['poster_path'] if movie.get('poster_path') else ""
-    item = xbmcgui.ListItem(label=movie['title'])
-    item.setArt({"poster": poster_url, "thumb": poster_url})
-
-    cast_text = ", ".join(movie.get('top_cast', []))
-    full_plot = movie.get('overview', "")
-    if cast_text:
-        full_plot += "\n\nActeurs principaux : " + cast_text
-
-    item.setInfo("video", {
-        "title": movie['title'],
-        "plot": full_plot,
-        "year": movie.get('release_date', "").split("-")[0] if movie.get('release_date') else "",
-        "rating": float(movie.get('vote_average', 0)),
-        "premiered": movie.get('release_date', "")
-    })
-
-    movie_json = urllib.parse.quote(json.dumps(movie))
-    favorites = load_favorites()
-
-    is_favorite = any(fav.get('id') == movie.get('id') for fav in favorites)
-
-    context_menu = [
-        ("Afficher les informations", f"RunPlugin({sys.argv[0]}?action=show_info&movie={movie_json})"),
-        ("Ajouter/Modifier ma note et review", f"RunPlugin({sys.argv[0]}?action=add_review&movie={movie_json})"),
-        ("Lire la bande-annonce", f"RunPlugin({sys.argv[0]}?action=play&movie_id={movie.get('id', '')})")
-    ]
-
-    if is_favorite:
-        context_menu.append(("Retirer des favoris", f"RunPlugin({sys.argv[0]}?action=remove_from_favorites&movie={movie_json})"))
-    else:
-        context_menu.append(("Ajouter aux favoris", f"RunPlugin({sys.argv[0]}?action=add_to_favorites&movie={movie_json})"))
-
-    item.addContextMenuItems(context_menu)
-
-    url = f"{sys.argv[0]}?action=show_info&movie={movie_json}"
-    xbmcplugin.addDirectoryItem(handle, url, item, isFolder=False)
 
 def load_favorites():
     if not os.path.exists(FAVORITES_FILE):
